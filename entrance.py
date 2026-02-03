@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict
+
+import torch
+from torch import nn
+
+from qvit_test.evaluation import evaluate_qvit, evaluate_vit
+from qvit_test.feature_extraction import PatchConfig, PatchTokenizerCNN, get_mnist_dataloaders
+from qvit_test.qvit import QVIT
+from qvit_test.vit import ViT, ViTConfig
+
+
+@dataclass
+class TrainConfig:
+    batch_size: int = 64
+    epochs: int = 10
+    lr: float = 1e-3
+    data_dir: str = "./data"
+    device: str = "cpu"
+    train_qvit: bool = True
+    eval_qvit: bool = True
+    qvit_use_grover: bool = False
+
+
+def _train_epoch(
+    model: nn.Module,
+    tokenizer: PatchTokenizerCNN,
+    loader,
+    optimizer: torch.optim.Optimizer,
+    device: str,
+    use_qiskit: bool,
+    freeze_tokenizer: bool = False,
+) -> float:
+    model.train()
+    if freeze_tokenizer:
+        tokenizer.eval()
+        for param in tokenizer.parameters():
+            param.requires_grad_(False)
+    else:
+        tokenizer.train()
+        for param in tokenizer.parameters():
+            param.requires_grad_(True)
+    criterion = nn.CrossEntropyLoss()
+
+    total_loss = 0.0
+    total = 0
+    for images, labels in loader:
+        images = images.to(device)
+        labels = labels.to(device)
+
+        tokens = torch.nan_to_num(tokenizer(images), nan=0.0, posinf=1e4, neginf=-1e4)
+        if isinstance(model, QVIT):
+            logits, _ = model(tokens, use_qiskit=use_qiskit)
+        else:
+            logits, _ = model(tokens)
+
+        logits = torch.nan_to_num(logits, nan=0.0, posinf=1e4, neginf=-1e4)
+
+        loss = criterion(logits, labels)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item() * labels.size(0)
+        total += labels.size(0)
+
+    return total_loss / max(1, total)
+
+
+def train_and_evaluate(
+    train_cfg: TrainConfig,
+    vit_cfg: ViTConfig | None = None,
+) -> Dict[str, Dict[str, float]]:
+    vit_cfg = vit_cfg or ViTConfig()
+    patch_cfg = PatchConfig(embed_dim=vit_cfg.embed_dim)
+
+    train_loader, test_loader = get_mnist_dataloaders(
+        batch_size=train_cfg.batch_size,
+        data_dir=train_cfg.data_dir,
+    )
+
+    tokenizer = PatchTokenizerCNN(patch_cfg).to(train_cfg.device)
+    vit = ViT(num_patches=patch_cfg.num_patches, config=vit_cfg).to(train_cfg.device)
+
+    vit_opt = torch.optim.AdamW(
+        list(vit.parameters()) + list(tokenizer.parameters()), lr=train_cfg.lr
+    )
+    qvit = None
+    qvit_opt = None
+    if train_cfg.train_qvit:
+        qvit = QVIT(num_patches=patch_cfg.num_patches, config=vit_cfg).to(train_cfg.device)
+        qvit_opt = torch.optim.AdamW(
+            list(qvit.parameters()) + list(tokenizer.parameters()), lr=train_cfg.lr
+        )
+
+    for epoch in range(1, train_cfg.epochs + 1):
+        print(f"Epoch {epoch}/{train_cfg.epochs} - ViT training...")
+        _train_epoch(
+            vit,
+            tokenizer,
+            train_loader,
+            vit_opt,
+            train_cfg.device,
+            use_qiskit=False,
+            freeze_tokenizer=False,
+        )
+        if train_cfg.train_qvit and qvit is not None and qvit_opt is not None:
+            print(f"Epoch {epoch}/{train_cfg.epochs} - QVIT training...")
+            _train_epoch(
+                qvit,
+                tokenizer,
+                train_loader,
+                qvit_opt,
+                train_cfg.device,
+                use_qiskit=train_cfg.qvit_use_grover,
+                freeze_tokenizer=True,
+            )
+
+    vit_metrics = evaluate_vit(vit, tokenizer, test_loader, device=train_cfg.device)
+    results: Dict[str, Dict[str, float]] = {"vit": vit_metrics}
+    if train_cfg.eval_qvit and qvit is not None:
+        qvit_metrics = evaluate_qvit(
+            qvit,
+            tokenizer,
+            test_loader,
+            device=train_cfg.device,
+            use_qiskit=train_cfg.qvit_use_grover,
+        )
+        results["qvit"] = qvit_metrics
+
+    return results
+
+
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Training on device {device}.")
+    results = train_and_evaluate(TrainConfig(device=device))
+    print(results)

@@ -1,0 +1,27 @@
+[project]
+name = "coursework"
+version = "0.1.0"
+description = "Deep Learning Coursework for Optical Microrobot Depth Estimation and Pose Estimation"
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.10.7",
+    "optuna>=4.6.0",
+    "pandas>=2.3.3",
+    "scikit-learn>=1.7.2",
+    "seaborn>=0.13.2",
+    "torch==2.9.0",
+    "torchvision==0.24.0",
+    "qiskit",
+]
+
+[tool.uv.sources]
+torch = [{ index = "torch-cu126" }]
+torchvision = [{ index = "torch-cu126" }]
+
+[[tool.uv.index]]
+name = "torch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.running_config]
+device = "cuda"  # Options: "cuda", "cpu", "mps" (for Apple Silicon)
