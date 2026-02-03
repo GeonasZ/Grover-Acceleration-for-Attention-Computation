@@ -1,3 +1,5 @@
+"""Evaluation helpers for ViT/QVIT models."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,7 +18,7 @@ from .vit import ViT
 class EvalConfig:
     device: str = "cpu"
     use_qiskit: bool = True
-    threshold: float = 0.1
+    threshold: float = 0.0482
     max_qubits: int = 4
     shots: int | None = None
 
@@ -32,6 +34,7 @@ def evaluate_tokens_classifier(
     test_loader: DataLoader,
     config: EvalConfig,
 ) -> Dict[str, float]:
+    # Evaluation mode for deterministic behavior.
     model.eval()
     tokenizer.eval()
 
@@ -44,6 +47,7 @@ def evaluate_tokens_classifier(
         for images, labels in test_loader:
             images = images.to(config.device)
             labels = labels.to(config.device)
+            # Sanitize tokenizer output for stable evaluation.
             tokens = torch.nan_to_num(tokenizer(images), nan=0.0, posinf=1e4, neginf=-1e4)
 
             if isinstance(model, QVIT):
@@ -53,6 +57,7 @@ def evaluate_tokens_classifier(
                     use_qiskit=config.use_qiskit,
                     max_qubits=config.max_qubits,
                     shots=config.shots,
+                    enable_filter=config.use_qiskit,
                 )
             elif isinstance(model, ViT):
                 logits, _ = model(tokens)
@@ -86,7 +91,7 @@ def evaluate_qvit(
     tokenizer: PatchTokenizerCNN,
     test_loader: DataLoader,
     device: str = "cpu",
-    threshold: float = 0.1,
+    threshold: float = 0.0482,
     use_qiskit: bool = True,
     max_qubits: int = 4,
     shots: int | None = None,

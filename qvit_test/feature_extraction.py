@@ -1,3 +1,5 @@
+"""MNIST loading and patch tokenization utilities."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,16 +20,19 @@ class PatchConfig:
 
     @property
     def num_patches(self) -> int:
+        # Number of non-overlapping patches per image.
         return (self.image_size // self.patch_size) ** 2
 
-
+# CNN-based patch tokenizer block.
 class PatchTokenizerCNN(nn.Module):
     """Split image into patches and use a small CNN to embed each patch."""
 
     def __init__(self, config: PatchConfig):
         super().__init__()
         self.config = config
+        # Unfold to extract non-overlapping patches.
         self.unfold = nn.Unfold(kernel_size=config.patch_size, stride=config.patch_size)
+        # Simple CNN to embed each patch.
         self.cnn = nn.Sequential(
             nn.Conv2d(config.in_channels, 32, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
@@ -41,12 +46,12 @@ class PatchTokenizerCNN(nn.Module):
         bsz, _, num_patches = patches.shape
         p = self.config.patch_size
         patches = patches.transpose(1, 2).contiguous()  # (B, N, C*P*P)
-        patches = patches.view(bsz * num_patches, self.config.in_channels, p, p)
-        emb = self.cnn(patches).view(bsz * num_patches, self.config.embed_dim)
-        emb = emb.view(bsz, num_patches, self.config.embed_dim)
+        patches = patches.view(bsz * num_patches, self.config.in_channels, p, p) # (B*N, C, P, P)
+        emb = self.cnn(patches).view(bsz * num_patches, self.config.embed_dim) # (B*N, D)
+        emb = emb.view(bsz, num_patches, self.config.embed_dim) # (B, N, D)
         return emb
 
-
+# Simple patch embedding classifier for pretraining. Used to train the PatchTokenizerCNN only.
 class PatchEmbeddingClassifier(nn.Module):
     """A simple classifier to pretrain the patch CNN using mean pooled tokens."""
 
@@ -65,6 +70,7 @@ def get_mnist_dataloaders(
     batch_size: int = 64,
     data_dir: str = "./data",
 ) -> Tuple[DataLoader, DataLoader]:
+    # Standard MNIST normalization.
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
@@ -88,7 +94,7 @@ def pretrain_patch_tokenizer(
     model = PatchEmbeddingClassifier(tokenizer).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
-
+    # Training loop for pretraining the patch tokenizer.
     model.train()
     for _ in range(epochs):
         for images, labels in train_loader:
@@ -99,5 +105,5 @@ def pretrain_patch_tokenizer(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
+    # Return the trained tokenizer.
     return tokenizer

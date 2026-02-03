@@ -1,3 +1,5 @@
+"""Grover search utilities for attention index selection (Qiskit simulation)."""
+
 from __future__ import annotations
 
 from typing import Iterable, List
@@ -22,15 +24,20 @@ def grover_mask(
     If the problem size is too large, it raises ValueError.
     """
 
+    # Convert scores to a list for indexing and counting.
     scores = list(scores)
     n = len(scores)
     if n == 0:
         return []
 
     num_qubits = math.ceil(math.log2(n))
+    # Guard against too large search spaces.
     if num_qubits > max_qubits:
         raise ValueError("Input too large for Grover simulation.")
 
+    # Identify marked indices. Here we simulate by classical thresholding first.
+    # can be done by quantum dot-product in the future.
+    # TODO: Implement quantum dot-product to comupte marked states directly.
     marked = [i for i, v in enumerate(scores) if v > threshold]
     if len(marked) == 0:
         return [False] * n
@@ -45,8 +52,11 @@ def grover_mask(
     except Exception as exc:  # pragma: no cover - optional dependency
         raise RuntimeError("Qiskit is not available.") from exc
 
+    # Prepare marked bitstrings. Here we convert marked indices to bitstrings.
     marked_bitstrings = [_int_to_bitstring(i, num_qubits) for i in marked]
 
+    # Construct oracle for Grover search.
+    # TODO: Understand the detailed implementation of Grover oracle.
     oracle = QuantumCircuit(num_qubits)
     for bitstr in marked_bitstrings:
         # Apply X to qubits where bit is 0
@@ -64,7 +74,7 @@ def grover_mask(
 
     grover_op = GroverOperator(oracle)
 
-    # Grover iterations
+    # Grover iterations (rule-of-thumb).
     m = len(marked)
     iterations = max(1, int(round(math.pi / 4 * math.sqrt((2**num_qubits) / m))))
 
@@ -78,7 +88,7 @@ def grover_mask(
     result = job.result()
     counts = result.get_counts(qc)
 
-    # Select the most frequent outcomes as indices to keep
+    # Select the most frequent outcomes as indices to keep.
     sorted_keys = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
     kept = set()
     for key, _ in sorted_keys:

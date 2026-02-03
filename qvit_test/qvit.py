@@ -1,3 +1,5 @@
+"""QVIT core modules: Grover-filtered attention and transformer blocks."""
+
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -11,13 +13,19 @@ from .vit import ViTConfig
 
 def grover_search_filter(
     attn_probs: torch.Tensor,
-    threshold: float = 0.1,
-    use_qiskit: bool = True,
-    max_qubits: int = 4,
-    shots: int | None = None,
+    threshold: float = 0.0482, # Threshold for attention score filtering.
+    use_qiskit: bool = True, # Whether to use Qiskit for Grover simulation. If False, uses classical thresholding.
+    max_qubits: int = 4, # Maximum qubits for Grover simulation.
+    shots: int | None = None, # Number of shots for Grover simulation. If None, uses 2x sequence length.
+    enable_filter: bool = True, # Whether to enable Grover search filtering. If False, no filtering is applied. and a mask of all True is returned.
 ) -> torch.Tensor:
     """Select attention indices using Grover search (Qiskit simulation) when possible."""
 
+    # Fast path: no filtering.
+    if not enable_filter:
+        return torch.ones_like(attn_probs, dtype=torch.bool)
+
+    # Classical thresholding fallback when Qiskit is disabled.
     if not use_qiskit:
         return attn_probs > threshold
 
@@ -27,8 +35,10 @@ def grover_search_filter(
         return attn_probs > threshold
 
     seq_len = attn_probs.shape[-1]
+    # Use 2x sequence length as a lightweight default for Grover shots.
     effective_shots = seq_len * 2 if shots is None else min(shots, seq_len * 2)
 
+    # Prepare mask tensor.
     mask = torch.zeros_like(attn_probs, dtype=torch.bool)
     for b in range(bsz):
         for h in range(heads):
@@ -42,8 +52,9 @@ def grover_search_filter(
                         shots=effective_shots,
                     )
                 except Exception:
-                    keep = [v > threshold for v in row]
+                    raise RuntimeError("Grover simulation failed.")
                 mask[b, h, i] = torch.tensor(keep, dtype=torch.bool, device=attn_probs.device)
+            
     # Ensure at least one token is selected per row to avoid all -inf softmax
     any_selected = mask.any(dim=-1, keepdim=True)
     if (~any_selected).any():
@@ -53,7 +64,7 @@ def grover_search_filter(
         mask = torch.where(any_selected, mask, fallback)
     return mask
 
-
+# Single self-attention layer with Grover-filtered attention.
 class GroverFilteredAttention(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1):
         super().__init__()
@@ -62,37 +73,39 @@ class GroverFilteredAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.qkv = nn.Linear(embed_dim, embed_dim * 3)
-        self.proj = nn.Linear(embed_dim, embed_dim)
+        self.qkv = nn.Linear(embed_dim, embed_dim * 3) # Q, K, V projection
+        self.proj = nn.Linear(embed_dim, embed_dim) # Output projection
         self.dropout = nn.Dropout(dropout)
 
     def forward(
         self,
         x: torch.Tensor,
-        threshold: float = 0.1,
+        threshold: float = 0.0482,
         use_qiskit: bool = True,
         max_qubits: int = 4,
         shots: int | None = None,
+        enable_filter: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         bsz, seq_len, _ = x.shape
         qkv = self.qkv(x).reshape(bsz, seq_len, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        # First pass attention (traditional ViT)
+        # First pass attention (traditional ViT).
         attn_logits = (q @ k.transpose(-2, -1)) * self.scale
         attn_probs = attn_logits.softmax(dim=-1)
 
-        # Grover-search-inspired filtering on attention probabilities
+        # Grover-search-inspired filtering on attention probabilities.
         selected = grover_search_filter(
             attn_probs,
             threshold=threshold,
             use_qiskit=use_qiskit,
             max_qubits=max_qubits,
             shots=shots,
+            enable_filter=enable_filter,
         )
 
-        # Second pass: only compute attention on selected indices
+        # Second pass: only compute attention on selected indices.
         filtered_logits = attn_logits.masked_fill(~selected, float("-inf"))
         filtered_attn = filtered_logits.softmax(dim=-1)
         filtered_attn = self.dropout(filtered_attn)
@@ -102,7 +115,7 @@ class GroverFilteredAttention(nn.Module):
         out = self.proj(out)
         return out, filtered_attn
 
-
+# Single transformer block with Grover-filtered attention.
 class QVITBlock(nn.Module):
     def __init__(self, config: ViTConfig):
         super().__init__()
@@ -122,10 +135,11 @@ class QVITBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        threshold: float = 0.1,
+        threshold: float = 0.0482,
         use_qiskit: bool = True,
         max_qubits: int = 4,
         shots: int | None = None,
+        enable_filter: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         attn_out, attn = self.attn(
             self.norm1(x),
@@ -133,12 +147,13 @@ class QVITBlock(nn.Module):
             use_qiskit=use_qiskit,
             max_qubits=max_qubits,
             shots=shots,
+            enable_filter=enable_filter,
         )
         x = x + attn_out
         x = x + self.mlp(self.norm2(x))
         return x, attn
 
-
+# ViT model with Grover-filtered attention.
 class QVIT(nn.Module):
     """ViT with Grover-search-filtered attention."""
 
@@ -159,10 +174,11 @@ class QVIT(nn.Module):
     def forward(
         self,
         tokens: torch.Tensor,
-        threshold: float = 0.1,
+        threshold: float = 0.0482,
         use_qiskit: bool = True,
         max_qubits: int = 4,
         shots: int | None = None,
+        enable_filter: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         bsz = tokens.shape[0]
         cls = self.cls_token.expand(bsz, -1, -1)
@@ -178,6 +194,7 @@ class QVIT(nn.Module):
                 use_qiskit=use_qiskit,
                 max_qubits=max_qubits,
                 shots=shots,
+                enable_filter=enable_filter,
             )
 
         x = self.norm(x)

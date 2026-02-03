@@ -1,3 +1,5 @@
+"""Minimal ViT implementation for patch token inputs."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,7 +18,7 @@ class ViTConfig:
     num_classes: int = 10
     dropout: float = 0.1
 
-
+# Standard multi-head self-attention block.
 class MultiHeadSelfAttention(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1):
         super().__init__()
@@ -34,6 +36,7 @@ class MultiHeadSelfAttention(nn.Module):
         x: torch.Tensor,
         attn_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # Standard scaled dot-product attention.
         bsz, seq_len, _ = x.shape
         qkv = self.qkv(x).reshape(bsz, seq_len, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)
@@ -50,7 +53,7 @@ class MultiHeadSelfAttention(nn.Module):
         out = self.proj(out)
         return out, attn
 
-
+# Single transformer block with standard multi-head self-attention.
 class TransformerBlock(nn.Module):
     def __init__(self, config: ViTConfig):
         super().__init__()
@@ -77,7 +80,7 @@ class TransformerBlock(nn.Module):
         x = x + self.mlp(self.norm2(x))
         return x, attn
 
-
+# ViT model that consumes precomputed patch tokens.
 class ViT(nn.Module):
     """A minimal ViT that consumes precomputed patch tokens."""
 
@@ -101,6 +104,7 @@ class ViT(nn.Module):
         attn_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         bsz = tokens.shape[0]
+        # Prepend CLS token and add positional embeddings.
         cls = self.cls_token.expand(bsz, -1, -1)
         x = torch.cat([cls, tokens], dim=1)
         x = x + self.pos_embed
