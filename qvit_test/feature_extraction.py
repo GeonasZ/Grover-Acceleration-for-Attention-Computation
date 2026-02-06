@@ -10,7 +10,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-
+# MNIST dataloader configuration.
 @dataclass
 class PatchConfig:
     image_size: int = 28
@@ -65,11 +65,21 @@ class PatchEmbeddingClassifier(nn.Module):
         pooled = tokens.mean(dim=1)
         return self.head(pooled)
 
-
+# MNIST dataloader utility.
 def get_mnist_dataloaders(
     batch_size: int = 64,
     data_dir: str = "./data",
 ) -> Tuple[DataLoader, DataLoader]:
+    '''
+    MNIST dataloader utility.
+    
+    :param batch_size: The batch size for the dataloaders.
+    :type batch_size: int
+    :param data_dir: The directory to store the dataset.
+    :type data_dir: str
+    :return: The train and test DataLoaders for MNIST dataset.
+    :rtype: Tuple[DataLoader, DataLoader]
+    '''
     # Standard MNIST normalization.
     transform = transforms.Compose(
         [
@@ -83,7 +93,7 @@ def get_mnist_dataloaders(
     test_loader = DataLoader(test, batch_size=batch_size, shuffle=False, num_workers=2)
     return train_loader, test_loader
 
-
+# train the patch tokenizer using a simple classifier head. Returns the trained tokenizer.
 def pretrain_patch_tokenizer(
     tokenizer: PatchTokenizerCNN,
     train_loader: DataLoader,
@@ -91,6 +101,23 @@ def pretrain_patch_tokenizer(
     epochs: int = 1,
     lr: float = 1e-3,
 ) -> PatchTokenizerCNN:
+    '''
+    Train the patch tokenizer using a simple classifier head. Returns the trained tokenizer.
+    
+    :param tokenizer: The PatchTokenizerCNN instance to be trained.
+    :type tokenizer: PatchTokenizerCNN
+    :param train_loader: The DataLoader for training data.
+    :type train_loader: DataLoader
+    :param device: The device to run the training on.
+    :type device: torch.device | str
+    :param epochs: The number of epochs for training.
+    :type epochs: int
+    :param lr: The learning rate for the optimizer.
+    :type lr: float
+    :return: The trained PatchTokenizerCNN instance.
+    :rtype: PatchTokenizerCNN
+    '''
+    # Create a simple model that combines the tokenizer with a linear head for classification.
     model = PatchEmbeddingClassifier(tokenizer).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()

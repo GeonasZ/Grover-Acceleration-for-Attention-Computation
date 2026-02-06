@@ -13,27 +13,37 @@ from .feature_extraction import PatchTokenizerCNN
 from .qvit import QVIT
 from .vit import ViT
 
-
+# Evaluation configuration dataclass to encapsulate evaluation parameters.
 @dataclass
 class EvalConfig:
+    '''Configuration for evaluating ViT/QVIT models.'''
     device: str = "cpu"
     use_qiskit: bool = True
     threshold: float = 0.0482
     max_qubits: int = 4
     shots: int | None = None
 
-
-def _accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
-    preds = logits.argmax(dim=1)
-    return (preds == labels).float().mean().item()
-
-
+# Evaluation function for both ViT and QVIT, returning accuracy and loss.
 def evaluate_tokens_classifier(
     model: nn.Module,
     tokenizer: PatchTokenizerCNN,
     test_loader: DataLoader,
     config: EvalConfig,
 ) -> Dict[str, float]:
+    '''
+    Evaluate a token-based classifier (ViT or QVIT) on the given test dataset.
+    
+    :param model: The token-based classifier model (ViT or QVIT).
+    :type model: nn.Module
+    :param tokenizer: The tokenizer to convert images to tokens.
+    :type tokenizer: PatchTokenizerCNN
+    :param test_loader: The DataLoader for the test dataset.
+    :type test_loader: DataLoader
+    :param config: The evaluation configuration.
+    :type config: EvalConfig
+    :return: A dictionary containing the accuracy and loss on the test dataset.
+    :rtype: Dict[str, float]
+    '''
     # Evaluation mode for deterministic behavior.
     model.eval()
     tokenizer.eval()
@@ -75,17 +85,31 @@ def evaluate_tokens_classifier(
         "loss": total_loss / max(1, total),
     }
 
-
+# Evaluation function specifically for ViT, utilizing standard token classification without Grover search.
 def evaluate_vit(
     model: ViT,
     tokenizer: PatchTokenizerCNN,
     test_loader: DataLoader,
     device: str = "cpu",
 ) -> Dict[str, float]:
+    '''
+    Evaluate a ViT model on the given test dataset without using Grover search.
+    
+    :param model: The ViT model to evaluate.
+    :type model: ViT
+    :param tokenizer: The tokenizer to convert images to tokens.
+    :type tokenizer: PatchTokenizerCNN
+    :param test_loader: The DataLoader for the test dataset.
+    :type test_loader: DataLoader
+    :param device: The device to run the evaluation on.
+    :type device: str
+    :return: A dictionary containing the accuracy and loss on the test dataset.
+    :rtype: Dict[str, float]
+    '''
     config = EvalConfig(device=device, use_qiskit=False)
     return evaluate_tokens_classifier(model, tokenizer, test_loader, config)
 
-
+# Evaluation function specifically for QVIT, utilizing Grover search for token selection.
 def evaluate_qvit(
     model: QVIT,
     tokenizer: PatchTokenizerCNN,
@@ -96,6 +120,28 @@ def evaluate_qvit(
     max_qubits: int = 4,
     shots: int | None = None,
 ) -> Dict[str, float]:
+    '''
+    Evaluate a QVIT model on the given test dataset using Grover search for token selection.
+    
+    :param model: The QVIT model to evaluate.
+    :type model: QVIT
+    :param tokenizer: The tokenizer to convert images to tokens.
+    :type tokenizer: PatchTokenizerCNN
+    :param test_loader: The DataLoader for the test dataset.
+    :type test_loader: DataLoader
+    :param device: The device to run the evaluation on.
+    :type device: str
+    :param threshold: The threshold for Grover search.
+    :type threshold: float
+    :param use_qiskit: Whether to use Qiskit for Grover search.
+    :type use_qiskit: bool
+    :param max_qubits: The maximum number of qubits to use for Grover search.
+    :type max_qubits: int
+    :param shots: The number of shots to use for Grover search.
+    :type shots: int | None
+    :return: A dictionary containing the accuracy and loss on the test dataset.
+    :rtype: Dict[str, float]
+    '''
     config = EvalConfig(
         device=device,
         use_qiskit=use_qiskit,

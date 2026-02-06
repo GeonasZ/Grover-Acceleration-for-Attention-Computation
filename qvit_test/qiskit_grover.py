@@ -8,21 +8,42 @@ import math
 
 
 def _int_to_bitstring(value: int, num_qubits: int) -> str:
+    '''
+    Private convertor to convert an integer index to a bitstring of given length, for Grover oracle construction.
+    
+    :param value: The integer value to convert.
+    :type value: int
+    :param num_qubits: The number of qubits to use for the bitstring representation.
+    :type num_qubits: int
+    :return: The bitstring representation of the integer value.
+    :rtype: str
+    '''
     return format(value, f"0{num_qubits}b")
 
-
+# tool function for Grover search filtering in QVIT. 
 def grover_mask(
     scores: Iterable[float],
     threshold: float,
     max_qubits: int = 4,
     shots: int = 16,
 ) -> List[bool]:
-    """
+    '''
     Quantum-simulated Grover search to select indices with score > threshold.
 
     This is a demonstration-level implementation intended for small vectors.
     If the problem size is too large, it raises ValueError.
-    """
+    
+    :param scores: Iterable of scores to evaluate. Usually attention scores for attention acceleration.
+    :type scores: Iterable[float]
+    :param threshold: Threshold for score selection.
+    :type threshold: float
+    :param max_qubits: Maximum number of qubits to use for Grover search.
+    :type max_qubits: int
+    :param shots: Number of shots to run for Grover search. Each shot gives one candidate index for the answer. More shots can improve reliability at the cost of runtime.
+    :type shots: int
+    :return: List of booleans indicating whether each score is above the threshold.
+    :rtype: List[bool]
+    '''
 
     # Convert scores to a list for indexing and counting.
     scores = list(scores)

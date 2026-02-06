@@ -28,7 +28,7 @@ class TrainConfig:
     qvit_enable_filter: bool = True
     qvit_filter_start_epoch: int = 6
 
-
+# Train for one epoch. Returns average loss.
 def _train_epoch(
     model: nn.Module,
     tokenizer: PatchTokenizerCNN,
@@ -81,7 +81,7 @@ def _train_epoch(
 
     return total_loss / max(1, total)
 
-
+#
 def train_and_evaluate(
     train_cfg: TrainConfig,
     vit_cfg: ViTConfig | None = None,

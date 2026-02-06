@@ -19,7 +19,24 @@ def grover_search_filter(
     shots: int | None = None, # Number of shots for Grover simulation. If None, uses 2x sequence length.
     enable_filter: bool = True, # Whether to enable Grover search filtering. If False, no filtering is applied. and a mask of all True is returned.
 ) -> torch.Tensor:
-    """Select attention indices using Grover search (Qiskit simulation) when possible."""
+    '''
+    Grover-search-inspired filtering of attention probabilities. Returns a boolean mask of selected indices.
+    
+    :param attn_probs: Attention probabilities tensor of shape (B, H, S, S).
+    :type attn_probs: torch.Tensor
+    :param threshold: Threshold for attention score filtering.
+    :type threshold: float
+    :param use_qiskit: Whether to use Qiskit for Grover simulation. If False, uses classical thresholding.
+    :type use_qiskit: bool
+    :param max_qubits: Maximum qubits for Grover simulation.
+    :type max_qubits: int
+    :param shots: Number of shots for Grover simulation. If None, uses 2x sequence length.
+    :type shots: int | None
+    :param enable_filter: Whether to enable Grover search filtering. If False, no filtering is applied. and a mask of all True is returned.
+    :type enable_filter: bool
+    :return: Boolean mask tensor of shape (B, H, S, S) indicating selected indices.
+    :rtype: torch.Tensor
+    '''
 
     # Fast path: no filtering.
     if not enable_filter:

@@ -2,5 +2,22 @@
 
 This repository focuses on how Grover search can be applied to accelerate the attention mechanism in transformer models. Specifically, we explore the use of Grover search to speed up the computation of attention weights in visual transformer models on MNIST dataset. 
 
-The inspiration of this work comes from the paper "[Quantum Vision Transformer with Grover Search Acceleration](https://arxiv.org/abs/2307.02060)" (arXiv:2307.02060).
+# Project Structure
 
+- `entrance.py`: The main script to run the experiments.
+- `qvit_test\`: The package for qvit test.
+- - `evaluation.py`: Contains the evaluation functions for ViT and QVIT models.
+- - `feature_extraction.py`: Contains the feature extraction functionalities for transformers, i.e., tokenization and patchification.
+- - `qiskit_grover.py`: Grover search implementation using Qiskit. Only internally used in `qvit.py` to implement Grover search acceleration.
+- - `qvit.py`: The implementation of QVIT model with Grover search acceleration.
+- - `vit.py`: The implementation of traditinal ViT models.
+- `data\`: The directory to store the dataset.
+- `pyproject.toml`: The configuration file for the project. 
+- `uv.lock`: The lock file for the project. Please ensure to install the dependencies specified in this file. **uv** is strongly suggested to use.
+
+
+# References
+
+[Quantum Vision Transformer with Grover Search Acceleration](https://arxiv.org/abs/2307.02060) (arXiv:2307.02060).
+
+[Sublinear Time Quantum Algorithm for Attention Approximation](https://arXiv.org/abs/2602.00874) (arXiv:2602.00874).
