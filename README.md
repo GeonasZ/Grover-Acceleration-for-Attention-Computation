@@ -18,6 +18,6 @@ This repository focuses on how Grover search can be applied to accelerate the at
 
 # References
 
-[Quantum Vision Transformer with Grover Search Acceleration](https://arxiv.org/abs/2307.02060) (arXiv:2307.02060).
+[Quantum Vision Transformer with Grover Search Acceleration](https://arxiv.org/abs/arXiv:2307.08045)
 
 [Sublinear Time Quantum Algorithm for Attention Approximation](https://arXiv.org/abs/2602.00874) (arXiv:2602.00874).
