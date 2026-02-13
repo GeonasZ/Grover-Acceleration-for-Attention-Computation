@@ -15,9 +15,13 @@ This repository focuses on how Grover search can be applied to accelerate the at
 - `pyproject.toml`: The configuration file for the project. 
 - `uv.lock`: The lock file for the project. Please ensure to install the dependencies specified in this file. **uv** is strongly suggested to use.
 
+# TODOs
+- Implement percentile record during training. Use the average of percentiles during training as the percentile when during prediction. (Solution for looking for a appropriate percentile threshold)
+
+- Implement the local connection mask in parallel with 
 
 # References
 
-[Quantum Vision Transformer with Grover Search Acceleration](https://arxiv.org/abs/arXiv:2307.08045)
+[Grover Search for Acceleration of Attention Computation](https://arxiv.org/abs/arXiv:2307.08045) (arXiv:2307.08045)
 
 [Sublinear Time Quantum Algorithm for Attention Approximation](https://arXiv.org/abs/2602.00874) (arXiv:2602.00874).
