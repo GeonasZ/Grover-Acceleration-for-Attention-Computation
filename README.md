@@ -1,27 +1,78 @@
 # Grover Acceleration for Attention Computation
 
-This repository focuses on how Grover search can be applied to accelerate the attention mechanism in transformer models. Specifically, we explore the use of Grover search to speed up the computation of attention weights in visual transformer models on MNIST dataset. 
+This repository explores applying **Grover search** to accelerate the attention mechanism in transformer models. We implement a **Quantum Vision Transformer (QVIT)** that uses Grover search to approximate attention weight computation, and compare it with a standard **Vision Transformer (ViT)** on the MNIST dataset.
 
-# Project Structure
+## Features
 
-- `entrance.py`: The main script to run the experiments.
-- `qvit_test\`: The package for qvit test.
-- - `evaluation.py`: Contains the evaluation functions for ViT and QVIT models.
-- - `feature_extraction.py`: Contains the feature extraction functionalities for transformers, i.e., tokenization and patchification.
-- - `qiskit_grover.py`: Grover search implementation using Qiskit. Only internally used in `qvit.py` to implement Grover search acceleration.
-- - `qvit.py`: The implementation of QVIT model with Grover search acceleration.
-- - `vit.py`: The implementation of traditinal ViT models.
-- `data\`: The directory to store the dataset.
-- `pyproject.toml`: The configuration file for the project. 
-- `uv.lock`: The lock file for the project. Please ensure to install the dependencies specified in this file. **uv** is strongly suggested to use.
+- **ViT**: Standard Vision Transformer with patch embedding and self-attention.
+- **QVIT**: Quantum-augmented ViT with Grover-search-based attention approximation (optionally with filtering).
+- **Patch tokenizers**:
+  - **PatchTokenizerCNN** (`feature_extraction.py`): CNN-based patch embedding (hybrid pipeline; can be pretrained with `pretrain_patch_tokenizer`).
+  - **SimplePatchTokenizer** (`simple_tokenizer.py`): Flatten each patch to pixel×channel and project with a single linear layer; drop-in replacement, no pretrained tokenizer.
+- **Evaluation**: Shared evaluation for ViT and QVIT (accuracy, etc.) on MNIST.
 
-# TODOs
-- Implement percentile record during training. Use the average of percentiles during training as the percentile when during prediction. (Solution for looking for a appropriate percentile threshold)
+## Requirements & Installation
 
-- Implement the local connection mask in parallel with 
+- **Python**: ≥ 3.13  
+- **Dependencies**: See `pyproject.toml`. Main ones: `torch`, `torchvision`, `qiskit`.  
+- **Package manager**: [uv](https://github.com/astral-sh/uv) is recommended.
 
-# References
+```bash
+# With uv (recommended)
+uv sync
 
-[Grover Search for Acceleration of Attention Computation](https://arxiv.org/abs/arXiv:2307.08045) (arXiv:2307.08045)
+# Or with pip (after creating a venv)
+pip install -e .
+```
 
-[Sublinear Time Quantum Algorithm for Attention Approximation](https://arXiv.org/abs/2602.00874) (arXiv:2602.00874).
+Optional: use the PyTorch CUDA index (see `pyproject.toml` and `[[tool.uv.index]]`) for GPU support.
+
+## Usage
+
+Run training and evaluation from the project root:
+
+```bash
+python entrance.py
+```
+
+This will:
+
+1. Load MNIST via `get_mnist_dataloaders`.
+2. Train ViT with the chosen patch tokenizer.
+3. Optionally train QVIT (with Grover and filtering) with the tokenizer frozen.
+4. Evaluate both models and print metrics.
+
+Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`, `epochs`, `device`, `train_qvit`, `qvit_use_grover`, `qvit_enable_filter`, `qvit_filter_start_epoch`). The default tokenizer can be switched between `PatchTokenizerCNN` and `SimplePatchTokenizer` by changing the import and instantiation in `entrance.py`.
+
+## Project Structure
+
+```
+.
+├── entrance.py              # Main entry: training and evaluation for ViT / QVIT
+├── pyproject.toml            # Project config and dependencies
+├── uv.lock                   # Lock file (use uv for reproducible installs)
+├── README.md
+├── data/                     # Dataset directory (e.g. MNIST, created on first run)
+│
+└── qvit_test/                # Main package
+    ├── __init__.py           # Exports: PatchConfig, PatchTokenizerCNN, SimplePatchTokenizer,
+    │                         #          get_mnist_dataloaders, ViT, ViTConfig, QVIT,
+    │                         #          evaluate_qvit, evaluate_vit
+    ├── feature_extraction.py # PatchConfig, PatchTokenizerCNN, get_mnist_dataloaders,
+    │                         # PatchEmbeddingClassifier, pretrain_patch_tokenizer
+    ├── simple_tokenizer.py   # SimplePatchTokenizer (linear patch embedding, same interface as PatchTokenizerCNN)
+    ├── vit.py                # ViT, ViTConfig (standard Vision Transformer)
+    ├── qvit.py               # QVIT (quantum ViT with Grover-based attention)
+    ├── qiskit_grover.py      # Grover search via Qiskit (used internally by qvit.py)
+    └── evaluation.py         # evaluate_vit, evaluate_qvit
+```
+
+## TODOs
+
+- Implement percentile record during training. Use the average of percentiles during training as the percentile when during prediction. (Solution for looking for an appropriate percentile threshold)
+- Implement the local connection mask in parallel with …
+
+## References
+
+- [Grover Search for Acceleration of Attention Computation](https://arxiv.org/abs/arXiv:2307.08045) (arXiv:2307.08045)
+- [Sublinear Time Quantum Algorithm for Attention Approximation](https://arxiv.org/abs/2602.00874) (arXiv:2602.00874)

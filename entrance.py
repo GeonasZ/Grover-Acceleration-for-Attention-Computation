@@ -12,7 +12,7 @@ from qvit_test.evaluation import evaluate_qvit, evaluate_vit
 from qvit_test.feature_extraction import PatchConfig, PatchTokenizerCNN, get_mnist_dataloaders
 from qvit_test.qvit import QVIT
 from qvit_test.vit import ViT, ViTConfig
-
+from qvit_test.simple_tokenizer import SimplePatchTokenizer
 
 @dataclass
 class TrainConfig:
@@ -26,12 +26,12 @@ class TrainConfig:
     eval_qvit: bool = True
     qvit_use_grover: bool = True
     qvit_enable_filter: bool = True
-    qvit_filter_start_epoch: int = 6
+    qvit_filter_start_epoch: int = 0
 
 # Train for one epoch. Returns average loss.
 def _train_epoch(
     model: nn.Module,
-    tokenizer: PatchTokenizerCNN,
+    tokenizer: PatchTokenizerCNN|SimplePatchTokenizer,
     loader,
     optimizer: torch.optim.Optimizer,
     device: str,
@@ -96,7 +96,8 @@ def train_and_evaluate(
     )
 
     # Shared patch tokenizer (frozen during QVIT training).
-    tokenizer = PatchTokenizerCNN(patch_cfg).to(train_cfg.device)
+    # tokenizer = PatchTokenizerCNN(patch_cfg).to(train_cfg.device)
+    tokenizer = SimplePatchTokenizer(patch_cfg).to(train_cfg.device)
     vit = ViT(num_patches=patch_cfg.num_patches, config=vit_cfg).to(train_cfg.device)
 
     vit_opt = torch.optim.AdamW(
