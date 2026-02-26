@@ -70,9 +70,21 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
 ## TODOs
 
 - Implement percentile record during training. Use the average of percentiles during training as the percentile when during prediction. (Solution for looking for an appropriate percentile threshold)
-- Implement the local connection mask in parallel with …
+- Implement the local connection mask in parallel with Grover search.
+- For report, discuss dequantization, and mention that QRAM is theoretically feasible, and maybe more.
 
 ## References
 
+
+**Algorithms**
 - [Grover Search for Acceleration of Attention Computation](https://arxiv.org/abs/arXiv:2307.08045) (arXiv:2307.08045)
 - [Sublinear Time Quantum Algorithm for Attention Approximation](https://arxiv.org/abs/2602.00874) (arXiv:2602.00874)
+
+**QRAM**
+
+- [Quantum Random Access Memory](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.100.160501)
+
+**Dequantization**
+- [Robust Dequantization of the Quantum Singular value Transformation and Quantum Machine Learning Algorithms](https://arxiv.org/abs/2304.04932)
+- [Robust Dequantization of the Quantum Singular value Transformation and Quantum Machine Learning Algorithms](https://arxiv.org/abs/1811.00414)
+
