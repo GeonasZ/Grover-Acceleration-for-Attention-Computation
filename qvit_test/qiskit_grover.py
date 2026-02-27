@@ -6,6 +6,10 @@ from typing import Iterable, List
 
 import math
 
+from qiskit import QuantumCircuit
+from qiskit.circuit.library import GroverOperator
+from qiskit import transpile
+from qiskit_aer import Aer
 
 def _int_to_bitstring(value: int, num_qubits: int) -> str:
     '''
@@ -64,14 +68,7 @@ def grover_mask(
         return [False] * n
     if len(marked) == n:
         return [True] * n
-
-    try:
-        from qiskit import QuantumCircuit
-        from qiskit.circuit.library import GroverOperator
-        from qiskit import Aer
-        backend = Aer.get_backend("qasm_simulator")
-    except Exception as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError("Qiskit is not available.") from exc
+    backend = Aer.get_backend("qasm_simulator")
 
     # Prepare marked bitstrings. Here we convert marked indices to bitstrings.
     marked_bitstrings = [_int_to_bitstring(i, num_qubits) for i in marked]
@@ -104,6 +101,8 @@ def grover_mask(
     for _ in range(iterations):
         qc.append(grover_op, range(num_qubits))
     qc.measure(range(num_qubits), range(num_qubits))
+
+    qc = transpile(qc, backend)
 
     job = backend.run(qc, shots=shots)
     result = job.result()

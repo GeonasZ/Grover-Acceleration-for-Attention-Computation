@@ -20,7 +20,7 @@ class EvalConfig:
     device: str = "cpu"
     use_qiskit: bool = True
     threshold: float = 0.0482
-    max_qubits: int = 4
+    max_qubits: int = 5  # 17 tokens (16 patch + 1 CLS) need 5 qubits
     shots: int | None = None
 
 # Evaluation function for both ViT and QVIT, returning accuracy and loss.
@@ -117,7 +117,7 @@ def evaluate_qvit(
     device: str = "cpu",
     threshold: float = 0.0482,
     use_qiskit: bool = True,
-    max_qubits: int = 4,
+    max_qubits: int = 5,
     shots: int | None = None,
 ) -> Dict[str, float]:
     '''

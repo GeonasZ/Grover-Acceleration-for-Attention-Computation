@@ -6,6 +6,8 @@ This repository explores applying **Grover search** to accelerate the attention 
 
 - **ViT**: Standard Vision Transformer with patch embedding and self-attention.
 - **QVIT**: Quantum-augmented ViT with Grover-search-based attention approximation (optionally with filtering).
+- **Dynamic thresholding**: During training, each attention row uses its own percentile (e.g. 0.9) as the selection threshold; a running **history threshold** (EMA of these values) is recorded and used at inference so no per-row quantile is needed at test time.
+- **Image local mask**: After Grover or classical thresholding, the selected indices are expanded by a configurable **neighbor radius** so that patch tokens adjacent in the 2D grid are also kept (e.g. `neighbor_radius=1` adds the 8 surrounding patches).
 - **Patch tokenizers**:
   - **PatchTokenizerCNN** (`feature_extraction.py`): CNN-based patch embedding (hybrid pipeline; can be pretrained with `pretrain_patch_tokenizer`).
   - **SimplePatchTokenizer** (`simple_tokenizer.py`): Flatten each patch to pixel×channel and project with a single linear layer; drop-in replacement, no pretrained tokenizer.
@@ -42,7 +44,7 @@ This will:
 3. Optionally train QVIT (with Grover and filtering) with the tokenizer frozen.
 4. Evaluate both models and print metrics.
 
-Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`, `epochs`, `device`, `train_qvit`, `qvit_use_grover`, `qvit_enable_filter`, `qvit_filter_start_epoch`). The default tokenizer can be switched between `PatchTokenizerCNN` and `SimplePatchTokenizer` by changing the import and instantiation in `entrance.py`.
+Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`, `epochs`, `device`, `train_qvit`, `qvit_use_grover`, `qvit_enable_filter`). The default tokenizer can be switched between `PatchTokenizerCNN` and `SimplePatchTokenizer` by changing the import and instantiation in `entrance.py`.
 
 ## Project Structure
 
@@ -69,9 +71,9 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
 
 ## TODOs
 
-- Implement percentile record during training. Use the average of percentiles during training as the percentile when during prediction. (Solution for looking for an appropriate percentile threshold)
-- Implement the local connection mask in parallel with Grover search.
-- Think about and implement how classic data is encoded into quantum 
+- Think about and implement how classic data is encoded into quantum states.
+
+## Report TODOs
 - For report, discuss dequantization, and mention that QRAM is theoretically feasible, and maybe more.
 
 ## References

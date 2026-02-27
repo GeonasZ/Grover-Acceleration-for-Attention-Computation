@@ -26,7 +26,6 @@ class TrainConfig:
     eval_qvit: bool = True
     qvit_use_grover: bool = True
     qvit_enable_filter: bool = True
-    qvit_filter_start_epoch: int = 0
 
 # Train for one epoch. Returns average loss.
 def _train_epoch(
@@ -123,13 +122,9 @@ def train_and_evaluate(
             freeze_tokenizer=False,
             enable_filter=True,
         )
-        # Optionally train QVIT with gradual filtering.
+        # Optionally train QVIT with Grover-filtered attention.
         if train_cfg.train_qvit and qvit is not None and qvit_opt is not None:
             print(f"Epoch {epoch}/{train_cfg.epochs} - QVIT training...")
-            enable_filter = (
-                train_cfg.qvit_enable_filter
-                and epoch >= train_cfg.qvit_filter_start_epoch
-            )
             _train_epoch(
                 qvit,
                 tokenizer,
@@ -138,7 +133,7 @@ def train_and_evaluate(
                 train_cfg.device,
                 use_qiskit=train_cfg.qvit_use_grover,
                 freeze_tokenizer=True,
-                enable_filter=enable_filter,
+                enable_filter=train_cfg.qvit_enable_filter,
             )
 
     # Quick attention distribution check on a single batch.
