@@ -71,6 +71,7 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
 
 - Implement percentile record during training. Use the average of percentiles during training as the percentile when during prediction. (Solution for looking for an appropriate percentile threshold)
 - Implement the local connection mask in parallel with Grover search.
+- Think about and implement how classic data is encoded into quantum 
 - For report, discuss dequantization, and mention that QRAM is theoretically feasible, and maybe more.
 
 ## References
@@ -83,6 +84,8 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
 **QRAM**
 
 - [Quantum Random Access Memory](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.100.160501)
+- [Quantum random access memory: a survey and critique](https://inspirehep.net/files/5d80c1c8461ae8f7896b24bfd170e1fe)
+
 
 **Dequantization**
 - [Robust Dequantization of the Quantum Singular value Transformation and Quantum Machine Learning Algorithms](https://arxiv.org/abs/2304.04932)
