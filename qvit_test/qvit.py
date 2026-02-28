@@ -140,13 +140,15 @@ def grover_search_filter(
                         if keep_remote[idx]:
                             mask[b, h, i, j] = True
 
-    # Ensure at least one token is selected per row to avoid all -inf softmax.
-    any_selected = mask.any(dim=-1, keepdim=True)
-    if (~any_selected).any():
-        fallback_idx = attn_probs.argmax(dim=-1, keepdim=True)
-        fallback = torch.zeros_like(mask)
-        fallback.scatter_(-1, fallback_idx, True)
-        mask = torch.where(any_selected, mask, fallback)
+    # When local_mask is None, a row can end up with no selected position; ensure at least one to avoid all -inf softmax.
+    # When local_mask is provided (e.g. from _build_local_neighborhood_mask), every row already has at least one True (e.g. CLS).
+    if local_mask is None:
+        any_selected = mask.any(dim=-1, keepdim=True)
+        if (~any_selected).any():
+            fallback_idx = attn_probs.argmax(dim=-1, keepdim=True)
+            fallback = torch.zeros_like(mask)
+            fallback.scatter_(-1, fallback_idx, True)
+            mask = torch.where(any_selected, mask, fallback)
     return mask
 
 # Single self-attention layer with Grover-filtered attention.

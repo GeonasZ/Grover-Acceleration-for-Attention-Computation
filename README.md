@@ -72,14 +72,18 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
 ## TODOs
 
 - Think about and implement how classic data is encoded into quantum states.
+- Implement quantum top-k search instead of 
+- The oracle now is hard coded by classic solutions, but in practice it should be a better black-box oracle.
 
 ## Report TODOs
 - For report, discuss dequantization, and mention that QRAM is theoretically feasible, and maybe more.
 
+- For report, discuss how dynamic modifying the oracle would affect the actual training and inference speed. It may be solved if there exists an black-box oracle that, given any few states and there values, can output the solution.
+
 ## References
 
 
-**Algorithms**
+**Quantum Algorithm for Inference Speedup**
 - [Grover Search for Acceleration of Attention Computation](https://arxiv.org/abs/arXiv:2307.08045) (arXiv:2307.08045)
 - [Sublinear Time Quantum Algorithm for Attention Approximation](https://arxiv.org/abs/2602.00874) (arXiv:2602.00874)
 
@@ -93,3 +97,10 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
 - [Robust Dequantization of the Quantum Singular value Transformation and Quantum Machine Learning Algorithms](https://arxiv.org/abs/2304.04932)
 - [Robust Dequantization of the Quantum Singular value Transformation and Quantum Machine Learning Algorithms](https://arxiv.org/abs/1811.00414)
 
+
+**Quantum Top-k**
+- [A Quantum Algorithm for Finding the Minimum](https://arxiv.org/pdf/quant-ph/9607014)
+- [Quantum Approximate -Minimum Finding](https://arxiv.org/abs/2412.16586)
+
+**Quantum Algorithms for Basic Arithmatics**
+- [Quantum Networks for Elementary Arithmetic Operations](https://arxiv.org/abs/quant-ph/9511018)
