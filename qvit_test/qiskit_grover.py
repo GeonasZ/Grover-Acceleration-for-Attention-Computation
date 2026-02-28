@@ -4,6 +4,7 @@ Provides multiple backends for Grover search:
 - \"numpy\": Pure NumPy state vector simulation (default, fastest, most stable).
 - \"torch\": PyTorch state vector simulation (can be placed on GPU).
 - \"qiskit\": Original Qiskit Aer circuit simulation (slow, but easy to compare with paper implementation).
+- \"shortcut\": Pure classical thresholding, fastest, no quantum simulation.
 """
 
 from __future__ import annotations
@@ -33,6 +34,16 @@ def _int_to_bitstring(value: int, num_qubits: int) -> str:
     return format(value, f"0{num_qubits}b")
 
 
+def grover_shortcut(scores: Iterable[float], threshold: float) -> List[bool]:
+    """
+    Pure classical thresholding: directly get mask by score > threshold, no Grover/quantum simulation.
+    """
+    scores_list = list(scores)
+    if not scores_list:
+        return []
+    return [s > threshold for s in scores_list]
+
+
 def _grover_numpy(
     n: int,
     num_qubits: int,
@@ -40,6 +51,10 @@ def _grover_numpy(
     shots: int,
 ) -> List[bool]:
     """Use NumPy for Grover state vector simulation."""
+
+
+    raise RuntimeError("NumPy is not preferred, please use shortcut backend instead. If you want to use NumPy, please remove this raise statement.")
+    
     N = 1 << num_qubits
     if n <= 0 or N == 0:
         return []
@@ -199,16 +214,17 @@ def grover_mask(
     threshold: float,
     max_qubits: int = 4,
     shots: int = 16,
-    backend: Literal["numpy", "torch", "qiskit"] = "numpy",
+    backend: Literal["numpy", "torch", "qiskit", "shortcut"] = "shortcut",
     torch_device: Optional[str] = None,
 ) -> List[bool]:
     """
     Grover-simulated mask to select indices with score > threshold.
 
     backend:
-      - \"numpy\": NumPy state vector simulation (default, fastest, most stable);
-      - \"torch\": PyTorch state vector simulation (can be placed on GPU).
-      - \"qiskit\": Original Qiskit Aer circuit simulation (slow, but easy to compare with paper implementation).
+      - \"numpy\": NumPy state vector simulation (default);
+      - \"shortcut\": Pure classical thresholding, fastest, no quantum simulation;
+      - \"torch\": PyTorch state vector simulation;
+      - \"qiskit\": Qiskit Aer circuit simulation (slow).
     """
 
     scores_list = list(scores)
@@ -216,12 +232,13 @@ def grover_mask(
     if n == 0:
         return []
 
+    if backend == "shortcut":
+        return grover_shortcut(scores_list, threshold)
+
     num_qubits = math.ceil(math.log2(n))
-    # Guard against too large search spaces.
     if num_qubits > max_qubits:
         raise ValueError("Input too large for Grover simulation.")
 
-    # Identify marked indices via classical thresholding.
     marked = [i for i, v in enumerate(scores_list) if v > threshold]
     if len(marked) == 0:
         return [False] * n

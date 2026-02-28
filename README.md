@@ -72,13 +72,20 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
 ## TODOs
 
 - Think about and implement how classic data is encoded into quantum states.
-- Implement quantum top-k search instead of 
+- Implement quantum top-k search.
+- Dive into how to design oracles for thesholding Grover, top-k attention search and attetion computaion integrated top-k attetion search algorithm.
 - The oracle now is hard coded by classic solutions, but in practice it should be a better black-box oracle.
 
 ## Report TODOs
 - For report, discuss dequantization, and mention that QRAM is theoretically feasible, and maybe more.
 
 - For report, discuss how dynamic modifying the oracle would affect the actual training and inference speed. It may be solved if there exists an black-box oracle that, given any few states and there values, can output the solution.
+
+- For report, discuss the two proposed approaches of attetion acceleration. 
+  1. Assume an oracle that, given $i$ as the $i^{\text{th}}$ row of query matrix and given $j$ as the $j^{\text{th}}$ row of key matrix, the oracle output whether their attention score is higher than one threshold.
+  2. First compute attention scores for all elements in attetion matrix. Then make use of the quantum top-k algorithm to compute the top-k attetion scores for each row. In the future, a more efficient oracle can be designed such that computation of attetion socres is integrated into the oracle or the quantum algorithm itself instead of relying on classic computers.
+
+- For report, mention the idea of combining classic static masking as well as quantum dynamic masking to make efficient and well-performed predictions.
 
 ## References
 

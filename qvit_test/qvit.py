@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Literal, Optional, Tuple
 
 import math
 import torch
@@ -52,7 +52,8 @@ def _build_local_neighborhood_mask(
 def grover_search_filter(
     attn_probs: torch.Tensor,
     threshold: float = 0.0482,  # Base threshold used as fallback / for inference.
-    use_qiskit: bool = True,  # Whether to use Qiskit for Grover simulation. If False, uses classical thresholding.
+    use_qiskit: bool = True,  # If False, use classical thresholding (vectorized, no loop).
+    grover_backend: Literal["shortcut", "numpy", "qiskit"] = "shortcut",  # Only used when use_qiskit=True. "shortcut" = vectorized threshold, no per-row loop.
     max_qubits: int = 5,  # Need 5 qubits for 17 tokens (16 patches + 1 CLS); 4 qubits only supports 16.
     shots: int | None = None,  # Number of shots for Grover simulation. If None, uses 2x sequence length.
     enable_filter: bool = True,  # If False, no filtering is applied and a mask of all True is returned.
@@ -114,11 +115,12 @@ def grover_search_filter(
         remote_mask = torch.ones_like(attn_probs, dtype=torch.bool)
         n_remote_per_row = torch.full((bsz, heads, seq_len), seq_len, device=device, dtype=torch.long)
 
-    if not use_qiskit:
-        # Classical: set remote positions by threshold; local positions already True in mask.
+    # Vectorized path: no loop over batch/heads/rows. Used when classical threshold or shortcut backend.
+    if not use_qiskit or grover_backend == "shortcut":
         remote_selected = attn_probs > thresholds.unsqueeze(-1)
         mask = mask | (remote_mask & remote_selected)
     else:
+        # Per-row Grover (numpy or qiskit): must loop and call grover_mask per (b, h, i).
         for b in range(bsz):
             for h in range(heads):
                 for i in range(seq_len):
@@ -131,15 +133,13 @@ def grover_search_filter(
                     t = thresholds[b, h, i].item()
                     n_qubits_needed = math.ceil(math.log2(n_remote)) if n_remote > 0 else 0
                     if n_qubits_needed > max_qubits:
-                        # Fallback: classical threshold on remote indices only
                         keep_remote = [s > t for s in scores_remote]
                     else:
                         effective_shots = default_shots if shots is None else min(shots, n_remote * 2)
-                        keep_remote = grover_mask(scores_remote, t, max_qubits=max_qubits, shots=effective_shots)
+                        keep_remote = grover_mask(scores_remote, t, max_qubits=max_qubits, shots=effective_shots, backend=grover_backend)
                     for idx, j in enumerate(remote_idx.tolist()):
                         if keep_remote[idx]:
                             mask[b, h, i, j] = True
-
     # When local_mask is None, a row can end up with no selected position; ensure at least one to avoid all -inf softmax.
     # When local_mask is provided (e.g. from _build_local_neighborhood_mask), every row already has at least one True (e.g. CLS).
     if local_mask is None:
@@ -178,6 +178,7 @@ class GroverFilteredAttention(nn.Module):
         x: torch.Tensor,
         threshold: float = 0.0482,
         use_qiskit: bool = True,
+        grover_backend: Literal["shortcut", "numpy", "qiskit"] = "shortcut",
         max_qubits: int = 5,
         shots: int | None = None,
         enable_filter: bool = True,
@@ -198,11 +199,12 @@ class GroverFilteredAttention(nn.Module):
             self.num_patches, seq_len, neighbor_radius, x.device
         )
 
-        # Grover (or classical threshold) only on non-local positions; local positions stay True.
+        # shortcut = vectorized threshold (no per-row loop); numpy/qiskit = per-row grover_mask.
         selected = grover_search_filter(
             attn_probs,
             threshold=threshold,
             use_qiskit=use_qiskit,
+            grover_backend=grover_backend,
             max_qubits=max_qubits,
             shots=shots,
             enable_filter=enable_filter,
@@ -249,6 +251,7 @@ class QVITBlock(nn.Module):
         x: torch.Tensor,
         threshold: float = 0.0482,
         use_qiskit: bool = True,
+        grover_backend: Literal["shortcut", "numpy", "qiskit"] = "shortcut",
         max_qubits: int = 5,
         shots: int | None = None,
         enable_filter: bool = True,
@@ -259,6 +262,7 @@ class QVITBlock(nn.Module):
             self.norm1(x),
             threshold=threshold,
             use_qiskit=use_qiskit,
+            grover_backend=grover_backend,
             max_qubits=max_qubits,
             shots=shots,
             enable_filter=enable_filter,
@@ -293,6 +297,7 @@ class QVIT(nn.Module):
         tokens: torch.Tensor,
         threshold: float = 0.0482,
         use_qiskit: bool = True,
+        grover_backend: Literal["shortcut", "numpy", "qiskit"] = "shortcut",
         max_qubits: int = 5,
         shots: int | None = None,
         enable_filter: bool = True,
@@ -311,6 +316,7 @@ class QVIT(nn.Module):
                 x,
                 threshold=threshold,
                 use_qiskit=use_qiskit,
+                grover_backend=grover_backend,
                 max_qubits=max_qubits,
                 shots=shots,
                 enable_filter=enable_filter,
