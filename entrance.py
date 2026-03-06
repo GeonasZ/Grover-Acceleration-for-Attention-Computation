@@ -8,6 +8,7 @@ from typing import Dict
 import torch
 from torch import nn
 
+from qvit_test.config_loader import get_grover_config, get_topk_config
 from qvit_test.evaluation import evaluate_qvit, evaluate_vit
 from qvit_test.feature_extraction import PatchConfig, PatchTokenizerCNN, get_mnist_dataloaders
 from qvit_test.qvit import QVIT
@@ -24,8 +25,6 @@ class TrainConfig:
     device: str = "cpu"
     train_qvit: bool = True
     eval_qvit: bool = True
-    qvit_use_grover: bool = True
-    qvit_enable_filter: bool = True
 
 # Train for one epoch. Returns average loss.
 def _train_epoch(
@@ -34,9 +33,7 @@ def _train_epoch(
     loader,
     optimizer: torch.optim.Optimizer,
     device: str,
-    use_qiskit: bool,
     freeze_tokenizer: bool = False,
-    enable_filter: bool = True,
 ) -> float:
     # Switch model and tokenizer to the desired training mode.
     model.train()
@@ -59,11 +56,8 @@ def _train_epoch(
         # Sanitize tokenizer output to avoid NaN/Inf propagation.
         tokens = torch.nan_to_num(tokenizer(images), nan=0.0, posinf=1e4, neginf=-1e4)
         if isinstance(model, QVIT):
-            logits, _ = model(
-                tokens,
-                use_qiskit=use_qiskit,
-                enable_filter=enable_filter,
-            )
+            # QVIT reads attention_filter and grover/topk params from config.json
+            logits, _ = model(tokens)
         else:
             logits, _ = model(tokens)
 
@@ -112,29 +106,10 @@ def train_and_evaluate(
 
     for epoch in range(1, train_cfg.epochs + 1):
         print(f"Epoch {epoch}/{train_cfg.epochs} - ViT training...")
-        _train_epoch(
-            vit,
-            tokenizer,
-            train_loader,
-            vit_opt,
-            train_cfg.device,
-            use_qiskit=False,
-            freeze_tokenizer=False,
-            enable_filter=True,
-        )
-        # Optionally train QVIT with Grover-filtered attention.
+        _train_epoch(vit, tokenizer, train_loader, vit_opt, train_cfg.device, freeze_tokenizer=False)
         if train_cfg.train_qvit and qvit is not None and qvit_opt is not None:
             print(f"Epoch {epoch}/{train_cfg.epochs} - QVIT training...")
-            _train_epoch(
-                qvit,
-                tokenizer,
-                train_loader,
-                qvit_opt,
-                train_cfg.device,
-                use_qiskit=train_cfg.qvit_use_grover,
-                freeze_tokenizer=True,
-                enable_filter=train_cfg.qvit_enable_filter,
-            )
+            _train_epoch(qvit, tokenizer, train_loader, qvit_opt, train_cfg.device, freeze_tokenizer=True)
 
     # Quick attention distribution check on a single batch.
     if qvit is not None:
@@ -144,10 +119,12 @@ def train_and_evaluate(
             images, _ = next(iter(test_loader))
             images = images.to(train_cfg.device)
             tokens = torch.nan_to_num(tokenizer(images), nan=0.0, posinf=1e4, neginf=-1e4)
+            go = get_grover_config()
+            tk = get_topk_config()
             _, attn = qvit(
                 tokens,
-                use_qiskit=False,
-                enable_filter=False,
+                grover_config={**go, "enable_filter": False},
+                topk_config={**tk, "enable_filter": False},
             )
             if attn is not None:
                 nan_ratio = torch.isnan(attn).float().mean().item()
@@ -166,13 +143,7 @@ def train_and_evaluate(
     vit_metrics = evaluate_vit(vit, tokenizer, test_loader, device=train_cfg.device)
     results: Dict[str, Dict[str, float]] = {"vit": vit_metrics}
     if train_cfg.eval_qvit and qvit is not None:
-        qvit_metrics = evaluate_qvit(
-            qvit,
-            tokenizer,
-            test_loader,
-            device=train_cfg.device,
-            use_qiskit=train_cfg.qvit_use_grover,
-        )
+        qvit_metrics = evaluate_qvit(qvit, tokenizer, test_loader, device=train_cfg.device)
         results["qvit"] = qvit_metrics
 
     return results

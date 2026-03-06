@@ -1,0 +1,20 @@
+{
+  "training_option": {
+    "attention_filter": "grover"
+  },
+  "grover": {
+    "threshold": 0.0482,
+    "use_qiskit": true,
+    "grover_backend": "shortcut",
+    "max_qubits": 5,
+    "shots": null,
+    "enable_filter": true,
+    "percentile": 0.9,
+    "neighbor_radius": 1
+  },
+  "topk": {
+    "k": 4,
+    "enable_filter": true,
+    "neighbor_radius": 0
+  }
+}

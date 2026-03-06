@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 import math
 import torch
 from torch import nn
 
+from .config_loader import get_attention_filter, get_grover_config, get_topk_config
+from .topk import topk_search_filter
 from .qiskit_grover import grover_mask
 from .vit import ViTConfig
 
@@ -176,45 +178,50 @@ class GroverFilteredAttention(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        threshold: float = 0.0482,
-        use_qiskit: bool = True,
-        grover_backend: Literal["shortcut", "numpy", "qiskit"] = "shortcut",
-        max_qubits: int = 5,
-        shots: int | None = None,
-        enable_filter: bool = True,
-        percentile: float = 0.9,
-        neighbor_radius: int = 1,
+        attention_filter: Literal["grover", "topk"] | None = None,
+        grover_config: Dict[str, Any] | None = None,
+        topk_config: Dict[str, Any] | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        attention_filter = attention_filter or get_attention_filter()
+        grover_config = grover_config or get_grover_config()
+        topk_config = topk_config or get_topk_config()
+
         bsz, seq_len, _ = x.shape
         qkv = self.qkv(x).reshape(bsz, seq_len, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        # First pass attention (traditional ViT).
         attn_logits = (q @ k.transpose(-2, -1)) * self.scale
         attn_probs = attn_logits.softmax(dim=-1)
 
-        # Local mask: for each query, self + neighbor patches (and CLS) are always True; Grover runs only on the rest.
+        radius = grover_config.get("neighbor_radius", 1) if attention_filter == "grover" else topk_config.get("neighbor_radius", 1)
         local_mask = _build_local_neighborhood_mask(
-            self.num_patches, seq_len, neighbor_radius, x.device
+            self.num_patches, seq_len, radius, x.device
         )
 
-        # shortcut = vectorized threshold (no per-row loop); numpy/qiskit = per-row grover_mask.
-        selected = grover_search_filter(
-            attn_probs,
-            threshold=threshold,
-            use_qiskit=use_qiskit,
-            grover_backend=grover_backend,
-            max_qubits=max_qubits,
-            shots=shots,
-            enable_filter=enable_filter,
-            percentile=percentile,
-            use_row_percentile=self.training,
-            history_threshold=self.history_threshold,
-            update_history=self.training,
-            use_history_threshold=not self.training,
-            local_mask=local_mask,
-        )
+        if attention_filter == "topk":
+            selected = topk_search_filter(
+                attn_probs,
+                local_mask=local_mask,
+                k=topk_config.get("k", 8),
+                enable_filter=topk_config.get("enable_filter", True),
+            )
+        else:
+            selected = grover_search_filter(
+                attn_probs,
+                local_mask=local_mask,
+                use_row_percentile=self.training,
+                history_threshold=self.history_threshold,
+                update_history=self.training,
+                use_history_threshold=not self.training,
+                threshold=grover_config.get("threshold", 0.0482),
+                use_qiskit=grover_config.get("use_qiskit", True),
+                grover_backend=grover_config.get("grover_backend", "shortcut"),
+                max_qubits=grover_config.get("max_qubits", 5),
+                shots=grover_config.get("shots"),
+                enable_filter=grover_config.get("enable_filter", True),
+                percentile=grover_config.get("percentile", 0.9),
+            )
 
         # Second pass: only compute attention on selected indices.
         filtered_logits = attn_logits.masked_fill(~selected, float("-inf"))
@@ -249,25 +256,15 @@ class QVITBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        threshold: float = 0.0482,
-        use_qiskit: bool = True,
-        grover_backend: Literal["shortcut", "numpy", "qiskit"] = "shortcut",
-        max_qubits: int = 5,
-        shots: int | None = None,
-        enable_filter: bool = True,
-        percentile: float = 0.9,
-        neighbor_radius: int = 1,
+        attention_filter: Literal["grover", "topk"] | None = None,
+        grover_config: Dict[str, Any] | None = None,
+        topk_config: Dict[str, Any] | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         attn_out, attn = self.attn(
             self.norm1(x),
-            threshold=threshold,
-            use_qiskit=use_qiskit,
-            grover_backend=grover_backend,
-            max_qubits=max_qubits,
-            shots=shots,
-            enable_filter=enable_filter,
-            percentile=percentile,
-            neighbor_radius=neighbor_radius,
+            attention_filter=attention_filter,
+            grover_config=grover_config,
+            topk_config=topk_config,
         )
         x = x + attn_out
         x = x + self.mlp(self.norm2(x))
@@ -295,15 +292,14 @@ class QVIT(nn.Module):
     def forward(
         self,
         tokens: torch.Tensor,
-        threshold: float = 0.0482,
-        use_qiskit: bool = True,
-        grover_backend: Literal["shortcut", "numpy", "qiskit"] = "shortcut",
-        max_qubits: int = 5,
-        shots: int | None = None,
-        enable_filter: bool = True,
-        percentile: float = 0.9,
-        neighbor_radius: int = 1,
+        attention_filter: Literal["grover", "topk"] | None = None,
+        grover_config: Dict[str, Any] | None = None,
+        topk_config: Dict[str, Any] | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        attention_filter = attention_filter or get_attention_filter()
+        grover_config = grover_config or get_grover_config()
+        topk_config = topk_config or get_topk_config()
+
         bsz = tokens.shape[0]
         cls = self.cls_token.expand(bsz, -1, -1)
         x = torch.cat([cls, tokens], dim=1)
@@ -314,14 +310,9 @@ class QVIT(nn.Module):
         for block in self.blocks:
             x, last_attn = block(
                 x,
-                threshold=threshold,
-                use_qiskit=use_qiskit,
-                grover_backend=grover_backend,
-                max_qubits=max_qubits,
-                shots=shots,
-                enable_filter=enable_filter,
-                percentile=percentile,
-                neighbor_radius=neighbor_radius,
+                attention_filter=attention_filter,
+                grover_config=grover_config,
+                topk_config=topk_config,
             )
 
         x = self.norm(x)

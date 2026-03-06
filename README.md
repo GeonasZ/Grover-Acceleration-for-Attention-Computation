@@ -44,19 +44,96 @@ This will:
 3. Optionally train QVIT (with Grover and filtering) with the tokenizer frozen.
 4. Evaluate both models and print metrics.
 
-Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`, `epochs`, `device`, `train_qvit`, `qvit_use_grover`, `qvit_enable_filter`). The default tokenizer can be switched between `PatchTokenizerCNN` and `SimplePatchTokenizer` by changing the import and instantiation in `entrance.py`.
+High-level run options (batch size, epochs, device, etc.) are set via `TrainConfig` in `entrance.py`. **QVIT attention filtering** (Grover vs top-k and all related parameters) is controlled by **`config.json`**; see [Configuration](#configuration) below. The default tokenizer can be switched between `PatchTokenizerCNN` and `SimplePatchTokenizer` by changing the import and instantiation in `entrance.py`.
+
+## Configuration
+
+QVIT reads attention-filter type and all Grover/top-k parameters from **`config.json`** in the project root. The file is loaded and merged with defaults by `qvit_test.config_loader`; training and evaluation use these settings automatically.
+
+### Config file location
+
+- **Default path**: `config.json` next to `entrance.py` (project root).
+- **Override**: set the environment variable `QVIT_CONFIG_PATH` to the full path of your JSON file.
+
+### Top-level structure
+
+```json
+{
+  "training_option": { ... },
+  "grover": { ... },
+  "topk": { ... }
+}
+```
+
+### `training_option`
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `attention_filter` | `"grover"` \| `"topk"` | `"grover"` | Which attention filter QVIT uses: **grover** = threshold/Grover-based selection; **topk** = top-k by attention score (plus local mask). |
+
+### `grover`
+
+Used when `training_option.attention_filter` is `"grover"`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `threshold` | float | `0.0482` | Fixed threshold for score > threshold (used when not using row percentile). |
+| `use_qiskit` | bool | `true` | If true, use Grover/threshold path; if false, pure classical threshold (vectorized). |
+| `grover_backend` | string | `"shortcut"` | Grover implementation: **shortcut** = vectorized threshold (fastest); **numpy** = NumPy state-vector simulation; **qiskit** = Qiskit Aer circuit simulation. |
+| `max_qubits` | int | `5` | Max qubits for Grover (e.g. 5 for 17 tokens). Sequences longer than 2^max_qubits fall back to classical threshold. |
+| `shots` | int \| null | `null` | Grover measurement shots; null means 2× sequence length. |
+| `enable_filter` | bool | `true` | If false, no filtering (mask all True). |
+| `percentile` | float | `0.9` | Row-wise percentile for dynamic threshold in training. |
+| `neighbor_radius` | int | `1` | 2D patch neighborhood radius (includes self). E.g. 1 = self + 8 neighbors (3×3). |
+
+### `topk`
+
+Used when `training_option.attention_filter` is `"topk"`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `k` | int | `8` | Number of remote (non-local) positions to keep per query row, by top attention score. Selection is per row (each of the B×H×S query positions), not per head or per batch. |
+| `enable_filter` | bool | `true` | If false, no filtering (mask all True). |
+| `neighbor_radius` | int | `1` | Same as Grover: 2D patch neighborhood radius (includes self). |
+
+### Example: switch to top-k and tune Grover
+
+To use **top-k** attention filter:
+
+```json
+"training_option": {
+  "attention_filter": "topk"
+}
+```
+
+To use **Grover** with faster vectorized backend and a higher threshold:
+
+```json
+"training_option": { "attention_filter": "grover" },
+"grover": {
+  "threshold": 0.05,
+  "grover_backend": "shortcut",
+  "max_qubits": 5,
+  "enable_filter": true,
+  "neighbor_radius": 1
+}
+```
+
+Config is loaded once and cached; use `config_loader.reset_config_cache()` in code if you need to reload (e.g. after changing the file).
 
 ## Project Structure
 
 ```
 .
-├── entrance.py              # Main entry: training and evaluation for ViT / QVIT
+├── config.json               # QVIT attention filter and grover/topk options (see Configuration)
+├── entrance.py               # Main entry: training and evaluation for ViT / QVIT
 ├── pyproject.toml            # Project config and dependencies
 ├── uv.lock                   # Lock file (use uv for reproducible installs)
 ├── README.md
 ├── data/                     # Dataset directory (e.g. MNIST, created on first run)
 │
 └── qvit_test/                # Main package
+    ├── config_loader.py      # Load config.json and expose get_attention_filter, get_grover_config, get_topk_config
     ├── __init__.py           # Exports: PatchConfig, PatchTokenizerCNN, SimplePatchTokenizer,
     │                         #          get_mnist_dataloaders, ViT, ViTConfig, QVIT,
     │                         #          evaluate_qvit, evaluate_vit
@@ -64,19 +141,22 @@ Configuration is controlled by `TrainConfig` in `entrance.py` (e.g. `batch_size`
     │                         # PatchEmbeddingClassifier, pretrain_patch_tokenizer
     ├── simple_tokenizer.py   # SimplePatchTokenizer (linear patch embedding, same interface as PatchTokenizerCNN)
     ├── vit.py                # ViT, ViTConfig (standard Vision Transformer)
-    ├── qvit.py               # QVIT (quantum ViT with Grover-based attention)
-    ├── qiskit_grover.py      # Grover search via Qiskit (used internally by qvit.py)
+    ├── qvit.py               # QVIT (quantum ViT with Grover/topk attention filter)
+    ├── topk.py               # topk_search_filter (top-k attention mask)
+    ├── qiskit_grover.py      # Grover search (shortcut / numpy / qiskit backends)
     └── evaluation.py         # evaluate_vit, evaluate_qvit
 ```
 
 ## TODOs
 
 - Think about and implement how classic data is encoded into quantum states.
-- Implement quantum top-k search.
 - Dive into how to design oracles for thesholding Grover, top-k attention search and attetion computaion integrated top-k attetion search algorithm.
 - The oracle now is hard coded by classic solutions, but in practice it should be a better black-box oracle.
 
 ## Report TODOs
+
+- For report, discuss how the complexity of reading classic data into quantum and write them back to classic after would affect the efficiency of algorithms.
+
 - For report, discuss dequantization, and mention that QRAM is theoretically feasible, and maybe more.
 
 - For report, discuss how dynamic modifying the oracle would affect the actual training and inference speed. It may be solved if there exists an black-box oracle that, given any few states and there values, can output the solution.
